@@ -30,6 +30,11 @@ import (
 	"github.com/opentracing/opentracing-go/log"
 )
 
+var (
+	// NopSubmitter provides a Nop implementation for WithSubmitter
+	NopSubmitter = func(ctx context.Context, contentType string, r io.Reader) error { return nil }
+)
+
 const (
 	// DefaultFlushInterval contains the default length of time between flushes
 	DefaultFlushInterval = time.Second * 3
