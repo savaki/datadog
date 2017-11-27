@@ -275,6 +275,9 @@ func (tr *transport) Push(span *Span, service string, nowInEpochNano int64) {
 	t.ParentSpanID = span.parentSpanID
 	t.Error = span.hasError
 
+	for k, v := range span.baggage {
+		t.Meta[k] = v
+	}
 	for k, v := range span.tags {
 		t.Meta[k] = v
 	}
