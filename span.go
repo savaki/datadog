@@ -16,10 +16,14 @@
 package datadog
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"reflect"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 
@@ -126,14 +130,55 @@ func (s *Span) Context() opentracing.SpanContext {
 	return s
 }
 
+type pp struct {
+	w io.Writer
+}
+
+func (p pp) Write(data []byte) (int, error) {
+	return p.w.Write(data)
+}
+
+// Width returns the value of the width option and whether it has been set.
+func (p pp) Width() (wid int, ok bool) {
+	return 0, false
+}
+
+// Precision returns the value of the precision option and whether it has been set.
+func (p pp) Precision() (precision int, ok bool) {
+	return 0, false
+}
+
+// Flag reports whether the flag c, a character, has been set.
+func (p pp) Flag(c int) bool {
+	return false
+}
+
 // Sets or changes the operation name.
 func (s *Span) SetOperationName(operationName string) opentracing.Span {
 	s.operationName = operationName
 	return s
 }
 
-func (s *Span) setError() {
+func (s *Span) setError(err error) {
+	if err == nil {
+		return
+	}
+
 	atomic.StoreInt32(&s.hasError, 1)
+
+	s.tags[ext.ErrorMsg] = err.Error()
+	s.tags[ext.ErrorType] = reflect.TypeOf(err).String()
+
+	switch v := err.(type) {
+	case fmt.Formatter:
+		buffer := bytes.NewBuffer(nil)
+		v.Format(pp{w: buffer}, 'v')
+		s.tags[ext.ErrorStack] = string(buffer.String())
+
+	default:
+		stack := debug.Stack()
+		s.tags[ext.ErrorStack] = string(stack)
+	}
 }
 
 // Adds a tag to the span.
@@ -151,23 +196,30 @@ func (s *Span) SetTag(key string, value interface{}) opentracing.Span {
 
 	switch key {
 	case ext.Error:
-		s.setError()
+		err, ok := value.(error)
+		if !ok {
+			err = fmt.Errorf("error set")
+		}
+		s.setError(err)
+		return s
 
 	case ext.Resource:
 		v, ok := value.(string)
 		if ok {
 			s.resource = v
 		}
+		return s
 
 	case ext.Type:
 		v, ok := value.(string)
 		if ok {
 			s.typ = v
 		}
+		return s
 	}
 
-	if _, ok := value.(error); ok {
-		s.setError()
+	if err, ok := value.(error); ok {
+		s.setError(err)
 	}
 
 	s.tags[key] = value
@@ -187,8 +239,8 @@ func (s *Span) SetTag(key string, value interface{}) opentracing.Span {
 // Also see Span.FinishWithOptions() and FinishOptions.BulkLogData.
 func (s *Span) LogFields(fields ...log.Field) {
 	for _, f := range fields {
-		if _, ok := f.Value().(error); ok {
-			s.setError()
+		if err, ok := f.Value().(error); ok {
+			s.setError(err)
 		}
 	}
 	s.tracer.logger.Log(s, fields...)
@@ -261,8 +313,8 @@ func (s *Span) LogKV(alternatingKeyValues ...interface{}) {
 			continue
 		}
 
-		if _, ok := v.(error); ok {
-			s.setError()
+		if err, ok := v.(error); ok {
+			s.setError(err)
 		}
 
 		fields = append(fields, toField(key, v))

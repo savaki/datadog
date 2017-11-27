@@ -18,7 +18,9 @@ var (
 var (
 	tracePool = &sync.Pool{
 		New: func() interface{} {
-			return &trace{}
+			return &trace{
+				Meta: map[string]interface{}{},
+			}
 		},
 	}
 
@@ -54,6 +56,10 @@ type trace struct {
 }
 
 func (t *trace) release() {
+	for k := range t.Meta {
+		delete(t.Meta, k)
+	}
+
 	t.TraceID = 0
 	t.SpanID = 0
 	t.Name = ""
@@ -268,7 +274,10 @@ func (tr *transport) Push(span *Span, service string, nowInEpochNano int64) {
 	t.Duration = nowInEpochNano - span.startedAt
 	t.ParentSpanID = span.parentSpanID
 	t.Error = span.hasError
-	t.Meta = map[string]interface{}{}
+
+	for k, v := range span.tags {
+		t.Meta[k] = v
+	}
 
 	tr.traces[tr.offset] = t
 	tr.offset++

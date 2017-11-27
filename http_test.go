@@ -46,8 +46,6 @@ func TestWrapHandler(t *testing.T) {
 
 		// Then
 		assert.EqualValues(t, map[string]interface{}{
-			ext.Type:       datadog.TypeWeb,
-			ext.Resource:   "/",
 			ext.HTTPMethod: http.MethodGet,
 			ext.HTTPCode:   "200",
 			ext.HTTPURL:    "/",
@@ -81,7 +79,9 @@ func TestWrapHandler(t *testing.T) {
 
 		// Then
 		assert.EqualValues(t, 1, count)
-		assert.NotNil(t, tags[ext.Error], "expected error to be set since status code 500")
+		assert.NotNil(t, tags[ext.ErrorMsg], "expected error to be set since status code 500")
+		assert.NotNil(t, tags[ext.ErrorStack], "expected error to be set since status code 500")
+		assert.NotNil(t, tags[ext.ErrorType], "expected error to be set since status code 500")
 	})
 
 	t.Run("from client", func(t *testing.T) {
