@@ -17,7 +17,7 @@ var (
 var (
 	tracePool = &sync.Pool{
 		New: func() interface{} {
-			return &trace{
+			return &Trace{
 				Meta: map[string]string{},
 			}
 		},
@@ -35,79 +35,12 @@ var (
 
 	payloadPool = &sync.Pool{
 		New: func() interface{} {
-			return make([]*trace, 0, DefaultBufSize)
+			return make([]*Trace, 0, DefaultBufSize)
 		},
 	}
 )
 
-type trace struct {
-	TraceID      uint64            `json:"trace_id"`
-	SpanID       uint64            `json:"span_id"`
-	Name         string            `json:"name"`
-	Resource     string            `json:"resource"`
-	Service      string            `json:"service"`
-	Type         string            `json:"type"`
-	Start        int64             `json:"start"`
-	Duration     int64             `json:"duration"`
-	ParentSpanID uint64            `json:"parent_id"`
-	Error        int32             `json:"error"`
-	Meta         map[string]string `json:"meta,omitempty"`
-}
-
-func (t *trace) release() {
-	for k := range t.Meta {
-		delete(t.Meta, k)
-	}
-
-	t.TraceID = 0
-	t.SpanID = 0
-	t.Name = ""
-	t.Resource = ""
-	t.Service = ""
-	t.Type = ""
-	t.Start = 0
-	t.Duration = 0
-	t.ParentSpanID = 0
-	t.Error = 0
-
-	tracePool.Put(t)
-}
-
-type traceMap map[uint64][]*trace
-
-func (tm traceMap) push(t *trace) {
-	if tm == nil || t == nil {
-		return
-	}
-
-	traces, ok := tm[t.TraceID]
-	if !ok {
-		traces = []*trace{}
-	}
-
-	tm[t.TraceID] = append(traces, t)
-}
-
-func (tm traceMap) Array() [][]*trace {
-	var traces [][]*trace
-	for _, items := range tm {
-		traces = append(traces, items)
-	}
-	return traces
-}
-
-func (tm traceMap) release() {
-	for key, traces := range tm {
-		for i := len(traces) - 1; i >= 0; i-- {
-			trace := traces[i]
-			trace.release()
-			traces[i] = nil
-		}
-		delete(tm, key)
-	}
-}
-
-func (tr *transport) publish(ctx context.Context, payload []*trace) error {
+func (tr *transport) publish(ctx context.Context, payload []*Trace) error {
 	defer tr.wg.Done()
 
 	defer func() {
@@ -130,7 +63,7 @@ func (tr *transport) publish(ctx context.Context, payload []*trace) error {
 		encoderPool.Put(encoder)
 	}()
 
-	if err := encoder.Encode(tm.Array()); err != nil {
+	if err := encoder.Encode(tm.array()); err != nil {
 		return err
 	}
 
@@ -154,7 +87,7 @@ type transport struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	done      chan struct{}
-	traces    []*trace
+	traces    []*Trace
 	offset    int
 	bufSize   int
 	submitter func(ctx context.Context, contentType string, r io.Reader) error
@@ -169,7 +102,7 @@ func newTransport(bufSize int, interval time.Duration, submitter func(ctx contex
 		ctx:       ctx,
 		cancel:    cancel,
 		done:      make(chan struct{}),
-		traces:    make([]*trace, bufSize),
+		traces:    make([]*Trace, bufSize),
 		bufSize:   bufSize,
 		submitter: submitter,
 		interval:  interval,
@@ -208,7 +141,7 @@ func (tr *transport) flush() {
 		return
 	}
 
-	payload := payloadPool.Get().([]*trace)
+	payload := payloadPool.Get().([]*Trace)
 	payload = append(payload, tr.traces[0:tr.offset]...)
 
 	for i := 0; i < tr.offset; i++ {
@@ -242,7 +175,7 @@ func (tr *transport) Push(span *Span, service string, nowInEpochNano int64) {
 		typ = TypeWeb
 	}
 
-	t := tracePool.Get().(*trace)
+	t := tracePool.Get().(*Trace)
 	t.TraceID = span.traceID
 	t.SpanID = span.spanID
 	t.Name = span.operationName
