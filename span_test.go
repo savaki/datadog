@@ -27,6 +27,7 @@ import (
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/log"
 	"github.com/savaki/datadog"
+	"github.com/savaki/datadog/ext"
 	"github.com/tj/assert"
 )
 
@@ -226,4 +227,25 @@ func TestInject(t *testing.T) {
 	})
 
 	time.Sleep(time.Second * 3)
+}
+
+func TestResource(t *testing.T) {
+	name := "foo"
+	opts := &opentracing.StartSpanOptions{}
+	datadog.Resource(name).Apply(opts)
+	assert.Equal(t, name, opts.Tags[ext.Resource])
+}
+
+func TestType(t *testing.T) {
+	name := "foo"
+	opts := &opentracing.StartSpanOptions{}
+	datadog.Type(name).Apply(opts)
+	assert.Equal(t, name, opts.Tags[ext.Type])
+}
+
+func TestService(t *testing.T) {
+	name := "foo"
+	opts := &opentracing.StartSpanOptions{}
+	datadog.Service(name).Apply(opts)
+	assert.Equal(t, name, opts.Tags[ext.Service])
 }

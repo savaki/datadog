@@ -417,20 +417,32 @@ func (fn spanOptionFunc) Apply(opts *opentracing.StartSpanOptions) {
 	fn(opts)
 }
 
+// Resource specifies the resource being accessed
 func Resource(r string) StartSpanOption {
 	return spanOptionFunc(func(opts *opentracing.StartSpanOptions) {
-		opts.Tags["datadog.resource"] = r
+		if opts.Tags == nil {
+			opts.Tags = map[string]interface{}{}
+		}
+		opts.Tags[ext.Resource] = r
 	})
 }
 
+// Type specifies the type of service: web, rpc, cache, db, etc
 func Type(t string) StartSpanOption {
 	return spanOptionFunc(func(opts *opentracing.StartSpanOptions) {
-		opts.Tags["datadog.type"] = t
+		if opts.Tags == nil {
+			opts.Tags = map[string]interface{}{}
+		}
+		opts.Tags[ext.Type] = t
 	})
 }
 
+// Service overrides the name of the service
 func Service(s string) StartSpanOption {
 	return spanOptionFunc(func(opts *opentracing.StartSpanOptions) {
-		opts.Tags["datadog.service"] = s
+		if opts.Tags == nil {
+			opts.Tags = map[string]interface{}{}
+		}
+		opts.Tags[ext.Service] = s
 	})
 }
