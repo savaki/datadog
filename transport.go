@@ -70,7 +70,6 @@ func (t *trace) release() {
 	t.Duration = 0
 	t.ParentSpanID = 0
 	t.Error = 0
-	t.Meta = nil
 
 	tracePool.Put(t)
 }
