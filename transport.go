@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"net/http"
 	"sync"
 	"time"
 
@@ -105,25 +104,6 @@ func (tm traceMap) release() {
 			traces[i] = nil
 		}
 		delete(tm, key)
-	}
-}
-
-func newSubmitter(url string, output io.Writer) func(ctx context.Context, contentType string, r io.Reader) error {
-	return func(ctx context.Context, contentType string, r io.Reader) error {
-		req, err := http.NewRequest(http.MethodPut, url, r)
-		if err != nil {
-			return err
-		}
-		req.Header.Set("Content-Type", contentType)
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-		io.Copy(output, resp.Body)
-
-		return nil
 	}
 }
 

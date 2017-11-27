@@ -22,12 +22,21 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/log"
+)
+
+const (
+	// EnvAgentHost specifies optional environment property to specify datadog agent host
+	EnvAgentHost = "DATADOG_AGENT_HOST"
+
+	// EnvAgentPort specifies optional environment property to specify datadog agent port
+	EnvAgentPort = "DATADOG_AGENT_PORT"
 )
 
 const (
@@ -481,14 +490,17 @@ func WithECSHost() Option {
 	})
 }
 
-// WithNopSubmitter provided primarily for testing.  Performs all the work, but drops all traces
-func WithNopSubmitter() Option {
+// WithNoSubmit provided primary for testing.  Traces will be dropped.  Logger
+// will be called if defined
+func WithNoSubmit() Option {
 	return optionFunc(func(opts *options) {
 		opts.submitter = func(ctx context.Context, contentType string, r io.Reader) error { return nil }
 	})
 }
 
-func WithSubmitter(submitter func(ctx context.Context, contentType string, r io.Reader) error) Option {
+type submitFunc func(ctx context.Context, contentType string, r io.Reader) error
+
+func WithSubmitFunc(submitter submitFunc) Option {
 	return optionFunc(func(opts *options) {
 		opts.submitter = submitter
 	})
@@ -507,12 +519,53 @@ func WithLogSpans() Option {
 	})
 }
 
+func newSubmitFunc(host, port string, output io.Writer) submitFunc {
+	if host == "" || port == "" {
+		return func(ctx context.Context, contentType string, r io.Reader) error {
+			return nil
+		}
+	}
+
+	u := fmt.Sprintf("http://%v:%v/v0.3/traces", host, port)
+	if _, err := url.Parse(u); err != nil {
+		fmt.Fprintf(output, "Datadog - invalid host:port, %v:%v.  Traces will not be sent\n", host, port)
+		return func(ctx context.Context, contentType string, r io.Reader) error {
+			return nil
+		}
+	}
+
+	return func(ctx context.Context, contentType string, r io.Reader) error {
+		req, err := http.NewRequest(http.MethodPut, u, r)
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", contentType)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		io.Copy(output, resp.Body)
+
+		return nil
+	}
+}
+
+func getOrElse(envKey, defaultValue string) string {
+	if v := os.Getenv(envKey); v != "" {
+		return v
+	}
+
+	return defaultValue
+}
+
 // New constructs a new datadog tracer for the specified service.
 // See https://docs.datadoghq.com/tracing/api/
 func New(service string, opts ...Option) *Tracer {
 	options := &options{
-		host:          "localhost",
-		port:          "8126",
+		host:          getOrElse(EnvAgentHost, "localhost"),
+		port:          getOrElse(EnvAgentPort, "8126"),
 		flushInterval: DefaultFlushInterval,
 		bufSize:       DefaultBufSize,
 		logger:        LoggerFunc(func(logContext LogContext, fields ...log.Field) {}),
@@ -524,8 +577,7 @@ func New(service string, opts ...Option) *Tracer {
 
 	submitter := options.submitter
 	if submitter == nil {
-		url := fmt.Sprintf("http://%v:%v/v0.3/traces", options.host, options.port)
-		submitter = newSubmitter(url, os.Stderr)
+		submitter = newSubmitFunc(options.host, options.port, ioutil.Discard)
 	}
 
 	tracer := &Tracer{

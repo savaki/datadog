@@ -62,6 +62,7 @@ func WrapHandler(h http.Handler, tracer *Tracer) http.Handler {
 		}
 		defer span.Finish()
 
+		req = req.WithContext(opentracing.ContextWithSpan(req.Context(), span))
 		h.ServeHTTP(rw, req)
 
 		span.SetTag(ext.Type, TypeWeb)
