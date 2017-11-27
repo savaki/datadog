@@ -65,7 +65,7 @@ func WrapHandler(h http.Handler, tracer *Tracer) http.Handler {
 		h.ServeHTTP(rw, req)
 
 		span.SetTag(ext.Type, TypeWeb)
-		span.SetTag(ext.Resource, req.Method)
+		span.SetTag(ext.Resource, req.URL.Path)
 		span.SetTag(ext.HTTPMethod, req.Method)
 		span.SetTag(ext.HTTPURL, req.URL.Path)
 		span.SetTag(ext.HTTPCode, strconv.Itoa(rw.statusCode))
