@@ -47,7 +47,7 @@ type Span struct {
 	parentSpanID  uint64
 	tracer        *Tracer
 	baggage       map[string]string
-	tags          map[string]interface{}
+	tags          map[string]string
 	operationName string
 	startedAt     int64
 	hasError      int32
@@ -191,7 +191,7 @@ func (s *Span) setError(err error) {
 // may ignore the tag, but shall not panic.
 func (s *Span) SetTag(key string, value interface{}) opentracing.Span {
 	if s.tags == nil {
-		s.tags = map[string]interface{}{}
+		s.tags = map[string]string{}
 	}
 
 	switch key {
@@ -222,7 +222,14 @@ func (s *Span) SetTag(key string, value interface{}) opentracing.Span {
 		s.setError(err)
 	}
 
-	s.tags[key] = value
+	switch v := value.(type) {
+	case string:
+		s.tags[key] = v
+	case fmt.Stringer:
+		s.tags[key] = v.String()
+	case error:
+		s.tags[key] = v.Error()
+	}
 
 	return s
 }

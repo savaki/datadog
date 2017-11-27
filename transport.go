@@ -19,7 +19,7 @@ var (
 	tracePool = &sync.Pool{
 		New: func() interface{} {
 			return &trace{
-				Meta: map[string]interface{}{},
+				Meta: map[string]string{},
 			}
 		},
 	}
@@ -42,17 +42,17 @@ var (
 )
 
 type trace struct {
-	TraceID      uint64                 `json:"trace_id"`
-	SpanID       uint64                 `json:"span_id"`
-	Name         string                 `json:"name"`
-	Resource     string                 `json:"resource"`
-	Service      string                 `json:"service"`
-	Type         string                 `json:"type"`
-	Start        int64                  `json:"start"`
-	Duration     int64                  `json:"duration"`
-	ParentSpanID uint64                 `json:"parent_id"`
-	Error        int32                  `json:"error"`
-	Meta         map[string]interface{} `json:"meta,omitempty"`
+	TraceID      uint64            `json:"trace_id"`
+	SpanID       uint64            `json:"span_id"`
+	Name         string            `json:"name"`
+	Resource     string            `json:"resource"`
+	Service      string            `json:"service"`
+	Type         string            `json:"type"`
+	Start        int64             `json:"start"`
+	Duration     int64             `json:"duration"`
+	ParentSpanID uint64            `json:"parent_id"`
+	Error        int32             `json:"error"`
+	Meta         map[string]string `json:"meta,omitempty"`
 }
 
 func (t *trace) release() {
