@@ -10,6 +10,8 @@ import (
 
 	"net"
 
+	"sync/atomic"
+
 	"github.com/opentracing/opentracing-go/log"
 	"github.com/savaki/datadog"
 	"github.com/savaki/datadog/ext"
@@ -45,7 +47,7 @@ func TestWrapHandler(t *testing.T) {
 		// Then
 		assert.EqualValues(t, map[string]interface{}{
 			ext.Type:       datadog.TypeWeb,
-			ext.Resource:   http.MethodGet,
+			ext.Resource:   "/",
 			ext.HTTPMethod: http.MethodGet,
 			ext.HTTPCode:   "200",
 			ext.HTTPURL:    "/",
@@ -87,17 +89,15 @@ func TestWrapHandler(t *testing.T) {
 		assert.Nil(t, err)
 		defer l.Close()
 
+		count := int32(0)
 		tracer := datadog.New("blah",
 			datadog.WithLogSpans(),
 			datadog.WithLoggerFunc(func(logContext datadog.LogContext, fields ...log.Field) {
-				fmt.Println("eek")
+				atomic.AddInt32(&count, 1)
 			}),
 		)
 
 		fn := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			for k, values := range req.Header {
-				fmt.Println(k, values)
-			}
 			w.Header().Set("Content-Type", "text/plain")
 			w.WriteHeader(http.StatusOK)
 			io.WriteString(w, "ok")
@@ -112,5 +112,6 @@ func TestWrapHandler(t *testing.T) {
 		rt := datadog.WrapRoundTripper(http.DefaultTransport, tracer)
 		_, err = rt.RoundTrip(req)
 		assert.Nil(t, err)
+		assert.EqualValues(t, 2, atomic.LoadInt32(&count))
 	})
 }

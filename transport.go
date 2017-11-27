@@ -3,7 +3,6 @@ package datadog
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"sync"
@@ -270,9 +269,6 @@ func (tr *transport) Push(span *Span, service string, nowInEpochNano int64) {
 	t.ParentSpanID = span.parentSpanID
 	t.Error = span.hasError
 	t.Meta = map[string]interface{}{}
-
-	fmt.Println("Now", time.Now().Format(time.RFC3339Nano))
-	fmt.Println("End", time.Unix(0, t.Start+t.Duration).Format(time.RFC3339Nano))
 
 	tr.traces[tr.offset] = t
 	tr.offset++
