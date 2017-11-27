@@ -53,6 +53,7 @@ type Span struct {
 	hasError      int32
 	resource      string
 	typ           string
+	service       string
 	err           error
 }
 
@@ -73,6 +74,7 @@ func (s *Span) release() {
 	s.hasError = 0
 	s.resource = ""
 	s.typ = ""
+	s.service = ""
 	s.err = nil
 
 	spanPool.Put(s)
@@ -117,7 +119,12 @@ func (s *Span) FinishWithOptions(opts opentracing.FinishOptions) {
 		finishedAt = opts.FinishTime.UnixNano()
 	}
 
-	s.tracer.transport.Push(s, s.tracer.service, finishedAt)
+	service := s.service
+	if service == "" {
+		service = s.tracer.service
+	}
+
+	s.tracer.transport.Push(s, service, finishedAt)
 	if s.tracer.logSpans {
 		s.LogFields(log.String("operationName", s.operationName))
 	}
@@ -214,6 +221,13 @@ func (s *Span) SetTag(key string, value interface{}) opentracing.Span {
 		v, ok := value.(string)
 		if ok {
 			s.typ = v
+		}
+		return s
+
+	case ext.Service:
+		v, ok := value.(string)
+		if ok {
+			s.service = v
 		}
 		return s
 	}
