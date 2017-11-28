@@ -166,6 +166,14 @@ func (s *Span) SetOperationName(operationName string) opentracing.Span {
 	return s
 }
 
+func (s *Span) setTag(key string, value interface{}) {
+	if s.tags == nil {
+		s.tags = map[string]interface{}{}
+	}
+
+	s.tags[key] = value
+}
+
 func (s *Span) setError(err error) {
 	if err == nil {
 		return
@@ -178,18 +186,18 @@ func (s *Span) setError(err error) {
 
 	atomic.StoreInt32(&s.hasError, 1)
 
-	s.SetTag(ext.ErrorMsg, err.Error())
-	s.SetTag(ext.ErrorType, reflect.TypeOf(err).String())
+	s.setTag(ext.ErrorMsg, err.Error())
+	s.setTag(ext.ErrorType, reflect.TypeOf(err).String())
 
 	switch v := err.(type) {
 	case fmt.Formatter:
 		buffer := bytes.NewBuffer(nil)
 		v.Format(pp{w: buffer}, 'v')
-		s.SetTag(ext.ErrorStack, string(buffer.String()))
+		s.setTag(ext.ErrorStack, buffer.String())
 
 	default:
 		stack := debug.Stack()
-		s.SetTag(ext.ErrorStack, string(stack))
+		s.setTag(ext.ErrorStack, string(stack))
 	}
 }
 
@@ -202,18 +210,7 @@ func (s *Span) setError(err error) {
 // tracing system does not know how to handle a particular value type, it
 // may ignore the tag, but shall not panic.
 func (s *Span) SetTag(key string, value interface{}) opentracing.Span {
-	if s.tags == nil {
-		s.tags = map[string]interface{}{}
-	}
-
 	switch key {
-	case ext.Error:
-		err, ok := value.(error)
-		if !ok {
-			err = fmt.Errorf("error set")
-		}
-		s.setError(err)
-
 	case ext.Resource:
 		v, ok := value.(string)
 		if ok {
@@ -235,17 +232,10 @@ func (s *Span) SetTag(key string, value interface{}) opentracing.Span {
 
 	if err, ok := value.(error); ok {
 		s.setError(err)
+		return s
 	}
 
-	switch v := value.(type) {
-	case string:
-		s.tags[key] = v
-	case fmt.Stringer:
-		s.tags[key] = v.String()
-	case error:
-		s.tags[key] = v.Error()
-	}
-
+	s.setTag(key, value)
 	return s
 }
 
