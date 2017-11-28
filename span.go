@@ -178,18 +178,18 @@ func (s *Span) setError(err error) {
 
 	atomic.StoreInt32(&s.hasError, 1)
 
-	s.tags[ext.ErrorMsg] = err.Error()
-	s.tags[ext.ErrorType] = reflect.TypeOf(err).String()
+	s.SetTag(ext.ErrorMsg, err.Error())
+	s.SetTag(ext.ErrorType, reflect.TypeOf(err).String())
 
 	switch v := err.(type) {
 	case fmt.Formatter:
 		buffer := bytes.NewBuffer(nil)
 		v.Format(pp{w: buffer}, 'v')
-		s.tags[ext.ErrorStack] = string(buffer.String())
+		s.SetTag(ext.ErrorStack, string(buffer.String()))
 
 	default:
 		stack := debug.Stack()
-		s.tags[ext.ErrorStack] = string(stack)
+		s.SetTag(ext.ErrorStack, string(stack))
 	}
 }
 
