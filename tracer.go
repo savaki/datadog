@@ -520,13 +520,13 @@ func WithECSHost() Option {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 		defer cancel()
 
-		url := "http://169.254.169.254/latest/meta-data/local-ipv4"
-		req, _ := http.NewRequest(http.MethodGet, url, nil)
-		req.WithContext(ctx)
+		u := "http://169.254.169.254/latest/meta-data/local-ipv4"
+		req, _ := http.NewRequest(http.MethodGet, u, nil)
+		req = req.WithContext(ctx)
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Unable to connect to instance metadata host, %v\n", url)
+			fmt.Fprintf(os.Stderr, "Unable to connect to instance metadata host, %v\n", u)
 			return
 		}
 		defer resp.Body.Close()
