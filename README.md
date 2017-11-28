@@ -50,8 +50,8 @@ By default, the datadog tracer will connect to the datadog agent at localhost:81
 ```go
 func main() {
 	tracer, _ := datadog.New("service", 
-		datadog.Host("10.0.0.1"), 
-		datadog.Port("8200"), 
+		datadog.WithHost("10.0.0.1"), 
+		datadog.WithPort("8200"), 
 	) 
 	defer tracer.Close()
 }
