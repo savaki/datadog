@@ -113,3 +113,21 @@ var h http.Handler = ....
 h = datadog.WrapHandler(h, tracer)
 ```
 
+## Logging
+
+By default, datadog logs to os.Stdout via the ```datadog.Stdout``` logger.  
+
+#### Using a custom logger
+
+You can use a custom logger by specifying WithLogger when you construct 
+the datadog tracer.
+
+For example:
+
+```go
+
+func main() {
+	tracer, _ := datadog.New("service", datadog.WithLogger(datadog.Stderr))
+	defer tracer.Close()
+}
+```

@@ -1,6 +1,28 @@
 package datadog
 
-import "github.com/opentracing/opentracing-go/log"
+import (
+	"bytes"
+	"sync"
+
+	"time"
+
+	"io"
+
+	"os"
+
+	"fmt"
+
+	"github.com/opentracing/opentracing-go/log"
+)
+
+var (
+	// bufferPool is used by Stdout
+	bufferPool = &sync.Pool{
+		New: func() interface{} {
+			return bytes.NewBuffer(make([]byte, 0, 512))
+		},
+	}
+)
 
 // LogContext provides an abstraction for metadata to be passed to the Log
 type LogContext interface {
@@ -26,6 +48,67 @@ type LoggerFunc func(logContext LogContext, fields ...log.Field)
 func (fn LoggerFunc) Log(logContext LogContext, fields ...log.Field) {
 	fn(logContext, fields...)
 }
+
+func newLogger(w io.Writer, timeFunc func() time.Time) LoggerFunc {
+	return func(logContext LogContext, fields ...log.Field) {
+		buffer := bufferPool.Get().(*bytes.Buffer)
+		defer func() {
+			bufferPool.Put(bufferPool)
+		}()
+
+		buffer.Reset()
+		buffer.WriteString(timeFunc().Format(time.RFC3339))
+
+		for _, f := range fields {
+			if f.Key() == "message" {
+				buffer.WriteString(" ")
+				buffer.WriteString(toString(f.Value()))
+				break
+			}
+		}
+
+		for _, f := range fields {
+			if f.Key() != "message" {
+				continue
+			}
+			buffer.WriteString(" ")
+			buffer.WriteString(f.Key())
+			buffer.WriteString("=")
+			buffer.WriteString(toString(f.Value()))
+		}
+
+		buffer.WriteString(" service=")
+		buffer.WriteString(logContext.Service())
+
+		logContext.ForeachBaggageItem(func(key, value string) bool {
+			buffer.WriteString(" ")
+			buffer.WriteString(key)
+			buffer.WriteString("=")
+			buffer.WriteString(value)
+			return true
+		})
+
+		logContext.ForeachTag(func(key string, value interface{}) bool {
+			buffer.WriteString(" ")
+			buffer.WriteString(key)
+			buffer.WriteString("=")
+			buffer.WriteString(toString(value))
+			return true
+		})
+
+		fmt.Fprintln(buffer)
+
+		w.Write(buffer.Bytes())
+	}
+}
+
+var (
+	// Stdout provides a default logger implementation that logs to os.Stdout
+	Stdout = newLogger(os.Stdout, func() time.Time { return time.Now() })
+
+	// Stderr provides a default logger implementation that logs to os.Stderr
+	Stderr = newLogger(os.Stderr, func() time.Time { return time.Now() })
+)
 
 // MultiLogger allows logging messages to be sent to multiple loggers
 func MultiLogger(loggers ...Logger) Logger {

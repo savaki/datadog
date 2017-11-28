@@ -584,7 +584,7 @@ func New(service string, opts ...Option) (*Tracer, error) {
 		host:      getOrElse(EnvAgentHost, "localhost"),
 		port:      getOrElse(EnvAgentPort, "8126"),
 		threshold: DefaultThreshold,
-		logger:    LoggerFunc(func(logContext LogContext, fields ...log.Field) {}),
+		logger:    Stdout,
 		timeFunc:  func() int64 { return time.Now().UnixNano() },
 		debug:     ioutil.Discard,
 	}
