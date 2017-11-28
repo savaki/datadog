@@ -23,6 +23,7 @@ func TestWrapHandler(t *testing.T) {
 		tags := map[string]interface{}{}
 
 		tracer := datadog.New("blah",
+			datadog.WithNop(),
 			datadog.WithLogSpans(),
 			datadog.WithLoggerFunc(func(logContext datadog.LogContext, fields ...log.Field) {
 				logContext.ForeachTag(func(key string, value interface{}) bool {
@@ -31,6 +32,7 @@ func TestWrapHandler(t *testing.T) {
 				})
 			}),
 		)
+		defer tracer.Close()
 
 		fn := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			w.Header().Set("Content-Type", "text/plain")
@@ -57,6 +59,7 @@ func TestWrapHandler(t *testing.T) {
 		tags := map[string]interface{}{}
 
 		tracer := datadog.New("blah",
+			datadog.WithNop(),
 			datadog.WithLogSpans(),
 			datadog.WithLoggerFunc(func(logContext datadog.LogContext, fields ...log.Field) {
 				logContext.ForeachTag(func(key string, value interface{}) bool {
@@ -66,6 +69,7 @@ func TestWrapHandler(t *testing.T) {
 				count++
 			}),
 		)
+		defer tracer.Close()
 
 		fn := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -91,11 +95,13 @@ func TestWrapHandler(t *testing.T) {
 
 		count := int32(0)
 		tracer := datadog.New("blah",
+			datadog.WithNop(),
 			datadog.WithLogSpans(),
 			datadog.WithLoggerFunc(func(logContext datadog.LogContext, fields ...log.Field) {
 				atomic.AddInt32(&count, 1)
 			}),
 		)
+		defer tracer.Close()
 
 		fn := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			w.Header().Set("Content-Type", "text/plain")

@@ -25,11 +25,13 @@ func TestTracer_LogFields(t *testing.T) {
 	var received []log.Field
 
 	tracer := datadog.New("blah",
+		datadog.WithNop(),
 		datadog.WithBaggageItem("a", "b"),
 		datadog.WithLoggerFunc(func(ctx datadog.LogContext, fields ...log.Field) {
 			received = fields
 		}),
 	)
+	defer tracer.Close()
 
 	field := log.String("hello", "world")
 	tracer.LogFields(field)
@@ -41,6 +43,7 @@ func TestWithBaggage(t *testing.T) {
 	calls := 0
 
 	tracer := datadog.New("blah",
+		datadog.WithNop(),
 		datadog.WithBaggageItem("hello", "world"),
 		datadog.WithLoggerFunc(func(ctx datadog.LogContext, fields ...log.Field) {
 			ctx.ForeachBaggageItem(func(key, value string) bool {
@@ -51,6 +54,7 @@ func TestWithBaggage(t *testing.T) {
 			})
 		}),
 	)
+	defer tracer.Close()
 
 	a := tracer.StartSpan("a")
 	a.LogFields()
@@ -65,6 +69,7 @@ func TestWithBaggage(t *testing.T) {
 
 func TestLive(t *testing.T) {
 	tracer := datadog.New("blah")
+	defer tracer.Close()
 
 	parent := tracer.StartSpan("parent")
 	time.Sleep(time.Millisecond * 100)

@@ -10,7 +10,7 @@ import (
 
 type traceEncoder interface {
 	io.Reader
-	Encode(traces [][]*Trace) error
+	Encode(groups [][]*Trace) error
 	ContentType() string
 }
 
@@ -19,9 +19,17 @@ type msgpackEncoder struct {
 	encoder *codec.Encoder
 }
 
-func (e *msgpackEncoder) Encode(traces [][]*Trace) error {
+func newMsgpackEncoder() *msgpackEncoder {
+	buffer := bytes.NewBuffer(make([]byte, 0, 4096))
+	return &msgpackEncoder{
+		buffer:  buffer,
+		encoder: codec.NewEncoder(buffer, &mh),
+	}
+}
+
+func (e *msgpackEncoder) Encode(groups [][]*Trace) error {
 	e.buffer.Reset()
-	return e.encoder.Encode(traces)
+	return e.encoder.Encode(groups)
 }
 
 func (e *msgpackEncoder) Read(data []byte) (int, error) {
@@ -37,9 +45,17 @@ type jsonEncoder struct {
 	encoder *json.Encoder
 }
 
-func (e *jsonEncoder) Encode(traces [][]*Trace) error {
+func newJsonEncoder() *jsonEncoder {
+	buffer := bytes.NewBuffer(make([]byte, 0, 4096))
+	return &jsonEncoder{
+		buffer:  buffer,
+		encoder: json.NewEncoder(buffer),
+	}
+}
+
+func (e *jsonEncoder) Encode(groups [][]*Trace) error {
 	e.buffer.Reset()
-	return e.encoder.Encode(traces)
+	return e.encoder.Encode(groups)
 }
 
 func (e *jsonEncoder) Read(data []byte) (int, error) {

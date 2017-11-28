@@ -22,7 +22,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -40,11 +39,11 @@ const (
 )
 
 const (
-	// DefaultFlushInterval contains the default length of time between flushes
-	DefaultFlushInterval = time.Second * 3
+	// FlushInterval contains the default length of time between flushes
+	FlushInterval = time.Second * 3
 
 	// DefaultBufSize contains the number of Spans to cache
-	DefaultBufSize = 8192
+	DefaultThreshold = 8192
 )
 
 const (
@@ -70,11 +69,16 @@ type Tracer struct {
 	logger  Logger
 	baggage map[string]string
 
-	transport *transport
-
 	// now contains the function to calculate when now is
-	now      func() int64
+	now func() int64
+
+	// logSpans indicates that spans should be recorded to the logger
 	logSpans bool
+
+	ctx    context.Context
+	cancel context.CancelFunc
+	done   chan struct{}
+	queue  *queue
 }
 
 // Create, start, and return a new Span with the given `operationName` and
@@ -218,6 +222,48 @@ func (t *Tracer) Inject(sm opentracing.SpanContext, format interface{}, carrier 
 	}
 
 	return nil
+}
+
+func (t *Tracer) push(span *Span, finishedAt int64) {
+	if finishedAt == 0 {
+		finishedAt = t.now()
+	}
+
+	service := span.service
+	if service == "" {
+		service = t.service
+	}
+	resource := span.resource
+	if resource == "" {
+		resource = span.operationName
+	}
+	typ := span.typ
+	if typ == "" {
+		typ = TypeWeb
+	}
+
+	trace := tracePool.Get().(*Trace)
+	trace.TraceID = span.traceID
+	trace.SpanID = span.spanID
+	trace.Name = span.operationName
+	trace.Resource = resource
+	trace.Service = service
+	trace.Type = typ
+	trace.Start = span.startedAt
+	trace.Duration = finishedAt - span.startedAt
+	trace.ParentSpanID = span.parentSpanID
+	trace.Error = span.hasError
+
+	if trace.Meta != nil {
+		for k, v := range span.baggage {
+			trace.Meta[k] = v
+		}
+		for k, v := range span.tags {
+			trace.Meta[k] = v
+		}
+	}
+
+	t.queue.Push(trace)
 }
 
 // LogFields allows logging outside the scope of a span
@@ -377,30 +423,48 @@ func (t *Tracer) Extract(format interface{}, carrier interface{}) (opentracing.S
 }
 
 func (t *Tracer) Close() error {
+	t.cancel()
+	<-t.done
+
 	if closer, ok := interface{}(t.now).(io.Closer); ok {
 		closer.Close()
 	}
 
-	return t.transport.Close()
+	return nil
 }
 
 func (t *Tracer) Flush() {
-	t.transport.Flush()
+	t.queue.Flush()
+}
+
+func (t *Tracer) run() {
+	defer close(t.done)
+
+	timer := time.NewTicker(FlushInterval)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-t.ctx.Done():
+			return
+
+		case <-timer.C:
+			t.queue.Flush()
+		}
+	}
 }
 
 // Options contains configuration parameters
 type options struct {
-	host string
-	port string
-	// Service holds name of the service
-	service       string
-	logger        Logger
-	baggage       map[string]string
-	flushInterval time.Duration
-	bufSize       int
-	submitter     func(ctx context.Context, contentType string, r io.Reader) error
-	timeFunc      func() int64
-	logSpans      bool
+	host        string
+	port        string
+	logger      Logger
+	baggage     map[string]string
+	threshold   int
+	transporter Transporter
+	timeFunc    func() int64
+	logSpans    bool
+	debug       io.Writer
 }
 
 // Option defines a functional configuration
@@ -436,17 +500,10 @@ func WithBaggageItem(key, value string) Option {
 	})
 }
 
-// WithFlushInterval allows the flush interval to be configured.  Defaults to
-func WithFlushInterval(d time.Duration) Option {
-	return optionFunc(func(opt *options) {
-		opt.flushInterval = d
-	})
-}
-
 // WithBufSize configures the numbers of Spans to cache
 func WithBufSize(n int) Option {
 	return optionFunc(func(opt *options) {
-		opt.bufSize = n
+		opt.threshold = n
 	})
 }
 
@@ -490,22 +547,6 @@ func WithECSHost() Option {
 	})
 }
 
-// WithNoSubmit provided primary for testing.  Traces will be dropped.  Logger
-// will be called if defined
-func WithNoSubmit() Option {
-	return optionFunc(func(opts *options) {
-		opts.submitter = func(ctx context.Context, contentType string, r io.Reader) error { return nil }
-	})
-}
-
-type submitFunc func(ctx context.Context, contentType string, r io.Reader) error
-
-func WithSubmitFunc(submitter submitFunc) Option {
-	return optionFunc(func(opts *options) {
-		opts.submitter = submitter
-	})
-}
-
 // WithTimeFunc allows for custom calculations of time.Now().UnixNano()
 func WithTimeFunc(fn func() int64) Option {
 	return optionFunc(func(opts *options) {
@@ -513,43 +554,23 @@ func WithTimeFunc(fn func() int64) Option {
 	})
 }
 
+func WithTransporter(transporter Transporter) Option {
+	return optionFunc(func(opts *options) {
+		opts.transporter = transporter
+	})
+}
+
+// WithNop is provided primarily for testing.  No traces will be published to datadog.
+func WithNop() Option {
+	return optionFunc(func(opts *options) {
+		opts.transporter = nopTransporter
+	})
+}
+
 func WithLogSpans() Option {
 	return optionFunc(func(opts *options) {
 		opts.logSpans = true
 	})
-}
-
-func newSubmitFunc(host, port string, output io.Writer) submitFunc {
-	if host == "" || port == "" {
-		return func(ctx context.Context, contentType string, r io.Reader) error {
-			return nil
-		}
-	}
-
-	u := fmt.Sprintf("http://%v:%v/v0.3/traces", host, port)
-	if _, err := url.Parse(u); err != nil {
-		fmt.Fprintf(output, "Datadog - invalid host:port, %v:%v.  Traces will not be sent\n", host, port)
-		return func(ctx context.Context, contentType string, r io.Reader) error {
-			return nil
-		}
-	}
-
-	return func(ctx context.Context, contentType string, r io.Reader) error {
-		req, err := http.NewRequest(http.MethodPut, u, r)
-		if err != nil {
-			return err
-		}
-		req.Header.Set("Content-Type", contentType)
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-		io.Copy(output, resp.Body)
-
-		return nil
-	}
 }
 
 func getOrElse(envKey, defaultValue string) string {
@@ -564,30 +585,37 @@ func getOrElse(envKey, defaultValue string) string {
 // See https://docs.datadoghq.com/tracing/api/
 func New(service string, opts ...Option) *Tracer {
 	options := &options{
-		host:          getOrElse(EnvAgentHost, "localhost"),
-		port:          getOrElse(EnvAgentPort, "8126"),
-		flushInterval: DefaultFlushInterval,
-		bufSize:       DefaultBufSize,
-		logger:        LoggerFunc(func(logContext LogContext, fields ...log.Field) {}),
-		timeFunc:      func() int64 { return time.Now().UnixNano() },
+		host:      getOrElse(EnvAgentHost, "localhost"),
+		port:      getOrElse(EnvAgentPort, "8126"),
+		threshold: DefaultThreshold,
+		logger:    LoggerFunc(func(logContext LogContext, fields ...log.Field) {}),
+		timeFunc:  func() int64 { return time.Now().UnixNano() },
+		debug:     ioutil.Discard,
 	}
 	for _, opt := range opts {
 		opt.Apply(options)
 	}
 
-	submitter := options.submitter
-	if submitter == nil {
-		submitter = newSubmitFunc(options.host, options.port, ioutil.Discard)
+	transporter := options.transporter
+	if transporter == nil {
+		transporter = newTransporter(options.debug, options.host, options.port)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	tracer := &Tracer{
-		service:   service,
-		logger:    options.logger,
-		baggage:   options.baggage,
-		transport: newTransport(options.bufSize, options.flushInterval, submitter),
-		now:       options.timeFunc,
-		logSpans:  options.logSpans,
+		service:  service,
+		logger:   options.logger,
+		baggage:  options.baggage,
+		now:      options.timeFunc,
+		logSpans: options.logSpans,
+		queue:    newQueue(options.threshold, transporter),
+		ctx:      ctx,
+		cancel:   cancel,
+		done:     make(chan struct{}),
 	}
+
+	go tracer.run()
 
 	return tracer
 }

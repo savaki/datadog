@@ -1,5 +1,21 @@
 package datadog
 
+import "sync"
+
+var (
+	traceGroupPool = &sync.Pool{
+		New: func() interface{} {
+			return make([][]*Trace, 0, 256)
+		},
+	}
+
+	traceSlicePool = &sync.Pool{
+		New: func() interface{} {
+			return make([]*Trace, 0, 32)
+		},
+	}
+)
+
 type Trace struct {
 	TraceID      uint64            `json:"trace_id"`
 	SpanID       uint64            `json:"span_id"`
@@ -14,11 +30,7 @@ type Trace struct {
 	Meta         map[string]string `json:"meta,omitempty"`
 }
 
-func (t *Trace) release() {
-	for k := range t.Meta {
-		delete(t.Meta, k)
-	}
-
+func (t *Trace) reset() *Trace {
 	t.TraceID = 0
 	t.SpanID = 0
 	t.Name = ""
@@ -30,39 +42,78 @@ func (t *Trace) release() {
 	t.ParentSpanID = 0
 	t.Error = 0
 
-	tracePool.Put(t)
+	for k := range t.Meta {
+		delete(t.Meta, k)
+	}
+
+	return t
 }
 
-type traceMap map[uint64][]*Trace
+func release(groups [][]*Trace) {
+	for i := len(groups) - 1; i >= 0; i-- {
+		traces := groups[i]
+		for j := len(traces) - 1; j >= 0; j-- {
+			tracePool.Put(traces[j].reset())
 
-func (tm traceMap) push(t *Trace) {
-	if tm == nil || t == nil {
+			traces[j] = nil
+		}
+		traceSlicePool.Put(traces[:0])
+
+		groups[i] = nil
+	}
+	traceGroupPool.Put(groups[:0])
+}
+
+type queue struct {
+	sync.Mutex
+	transporter Transporter
+	traces      map[uint64][]*Trace
+	threshold   int
+	n           int
+}
+
+func newQueue(threshold int, transporter Transporter) *queue {
+	return &queue{
+		transporter: transporter,
+		traces:      map[uint64][]*Trace{},
+		threshold:   threshold,
+	}
+}
+
+func (q *queue) publish() {
+	if q.n == 0 {
 		return
 	}
 
-	traces, ok := tm[t.TraceID]
+	groups := traceGroupPool.Get().([][]*Trace)
+	for key, item := range q.traces {
+		delete(q.traces, key)
+		groups = append(groups, item)
+	}
+
+	q.transporter.Publish(groups)
+	q.n = 0
+}
+
+func (q *queue) Push(t *Trace) {
+	q.Lock()
+	defer q.Unlock()
+
+	slice, ok := q.traces[t.TraceID]
 	if !ok {
-		traces = []*Trace{}
+		slice = traceSlicePool.Get().([]*Trace)
 	}
 
-	tm[t.TraceID] = append(traces, t)
+	q.traces[t.TraceID] = append(slice, t)
+	q.n++
+	if q.n == q.threshold {
+		q.publish()
+	}
 }
 
-func (tm traceMap) array() [][]*Trace {
-	var traces [][]*Trace
-	for _, items := range tm {
-		traces = append(traces, items)
-	}
-	return traces
-}
+func (q *queue) Flush() {
+	q.Lock()
+	defer q.Unlock()
 
-func (tm traceMap) release() {
-	for key, traces := range tm {
-		for i := len(traces) - 1; i >= 0; i-- {
-			trace := traces[i]
-			trace.release()
-			traces[i] = nil
-		}
-		delete(tm, key)
-	}
+	q.publish()
 }

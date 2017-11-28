@@ -90,7 +90,7 @@ func (s *Span) ForeachBaggageItem(fn func(k, v string) bool) {
 }
 
 // ForeachTag implements LogContext
-func (s *Span) ForeachTag(fn func(k string, value interface{}) bool) {
+func (s *Span) ForeachTag(fn func(k string, v interface{}) bool) {
 	for k, v := range s.tags {
 		if ok := fn(k, v); !ok {
 			return
@@ -113,18 +113,11 @@ func (s *Span) FinishWithOptions(opts opentracing.FinishOptions) {
 	defer s.release()
 
 	var finishedAt int64
-	if opts.FinishTime.IsZero() {
-		finishedAt = s.tracer.now()
-	} else {
+	if !opts.FinishTime.IsZero() {
 		finishedAt = opts.FinishTime.UnixNano()
 	}
 
-	service := s.service
-	if service == "" {
-		service = s.tracer.service
-	}
-
-	s.tracer.transport.Push(s, service, finishedAt)
+	s.tracer.push(s, finishedAt)
 	if s.tracer.logSpans {
 		s.LogFields(log.String("operationName", s.operationName))
 	}
