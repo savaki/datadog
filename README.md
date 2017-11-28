@@ -97,11 +97,15 @@ reference.
 As a convenience, the datadog tracer provides a couple of convenience methods
 above the standard opentracing Inject/Extract.  
 
+Instrument an http client with the datadog tracer. 
+
 ```go
 client := &http.Client{
 	Transport: datadog.WrapRoundTripper(http.DefaultRoundTripper, tracer),
 }
 ```
+
+Instrument an http server with the datadog tracer. 
 
 ```go
 var h http.Handler = ....
