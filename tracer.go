@@ -303,7 +303,7 @@ func extractTextMap(carrier interface{}) (*Span, error) {
 	fn := func(k, v string) error {
 		if k == httpHeader {
 			v, err := extract([]byte(v))
-			if err == nil {
+			if err != nil {
 				return opentracing.ErrSpanContextCorrupted
 			}
 			span = v
@@ -327,7 +327,11 @@ func extractHTTPHeaders(carrier interface{}) (*Span, error) {
 
 	m, ok := carrier.(opentracing.HTTPHeadersCarrier)
 	if !ok {
-		return nil, opentracing.ErrInvalidCarrier
+		if v, ok := carrier.(http.Header); ok {
+			m = opentracing.HTTPHeadersCarrier(v)
+		} else {
+			return nil, opentracing.ErrInvalidCarrier
+		}
 	}
 
 	fn := func(k, v string) error {

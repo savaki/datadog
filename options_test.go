@@ -3,6 +3,8 @@ package datadog
 import (
 	"testing"
 
+	"fmt"
+
 	"github.com/tj/assert"
 )
 
@@ -25,4 +27,21 @@ func TestWithPort(t *testing.T) {
 	options := options{}
 	WithPort(port).Apply(&options)
 	assert.Equal(t, port, options.port)
+}
+
+func TestWithTimeFunc(t *testing.T) {
+	const now = int64(12345)
+	options := options{}
+	WithTimeFunc(func() int64 { return now }).Apply(&options)
+	assert.Equal(t, now, options.timeFunc())
+}
+
+func TestWithTransporter(t *testing.T) {
+	err := fmt.Errorf("argle bargle")
+	fn := transporterFunc(func(groups [][]*Trace) error {
+		return err
+	})
+	options := options{}
+	WithTransporter(fn).Apply(&options)
+	assert.Equal(t, err, options.transporter.Publish(nil))
 }

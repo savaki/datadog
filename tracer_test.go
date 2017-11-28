@@ -4,6 +4,10 @@ import (
 	"testing"
 	"time"
 
+	"bytes"
+
+	"net/http"
+
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/log"
 	"github.com/savaki/datadog"
@@ -87,4 +91,65 @@ func TestLive(t *testing.T) {
 	tracer.Close()
 
 	time.Sleep(time.Second)
+}
+
+func TestBinaryCarrier(t *testing.T) {
+	tracer := datadog.New("blah", datadog.WithNop())
+	defer tracer.Close()
+
+	span := tracer.StartSpan("parent")
+	span.SetBaggageItem("hello", "world")
+
+	carrier := bytes.NewBuffer(nil)
+
+	// inject
+	err := tracer.Inject(span.Context(), opentracing.Binary, carrier)
+	assert.Nil(t, err)
+
+	// extract
+	sc, err := tracer.Extract(opentracing.Binary, carrier)
+	assert.Nil(t, err)
+
+	child := tracer.StartSpan("child", opentracing.ChildOf(sc))
+	assert.Equal(t, "world", child.BaggageItem("hello"))
+}
+
+func TestTextMapCarrier(t *testing.T) {
+	tracer := datadog.New("blah", datadog.WithNop())
+	defer tracer.Close()
+
+	span := tracer.StartSpan("parent")
+	span.SetBaggageItem("hello", "world")
+	carrier := opentracing.TextMapCarrier{}
+
+	// inject
+	err := tracer.Inject(span.Context(), opentracing.TextMap, carrier)
+	assert.Nil(t, err)
+
+	// extract
+	sc, err := tracer.Extract(opentracing.TextMap, carrier)
+	assert.Nil(t, err)
+
+	child := tracer.StartSpan("child", opentracing.ChildOf(sc))
+	assert.Equal(t, "world", child.BaggageItem("hello"))
+}
+
+func TestHTTPHeadersCarrier(t *testing.T) {
+	tracer := datadog.New("blah", datadog.WithNop())
+	defer tracer.Close()
+
+	span := tracer.StartSpan("parent")
+	span.SetBaggageItem("hello", "world")
+	carrier := http.Header{}
+
+	// inject
+	err := tracer.Inject(span.Context(), opentracing.HTTPHeaders, carrier)
+	assert.Nil(t, err)
+
+	// extract
+	sc, err := tracer.Extract(opentracing.HTTPHeaders, carrier)
+	assert.Nil(t, err)
+
+	child := tracer.StartSpan("child", opentracing.ChildOf(sc))
+	assert.Equal(t, "world", child.BaggageItem("hello"))
 }
