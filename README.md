@@ -131,3 +131,9 @@ func main() {
 	defer tracer.Close()
 }
 ```
+
+## Todo 
+
+- [ ] allow direct posts of traces to datadog e.g. agent-free tracer
+- [ ] integration datadog log api
+- [ ] allow direct posts of logs to datadog
