@@ -48,7 +48,7 @@ func captureLogs(target map[string]interface{}) datadog.LoggerFunc {
 }
 
 func TestBaggage(t *testing.T) {
-	tracer := datadog.New("blah",
+	tracer, _ := datadog.New("blah",
 		datadog.WithNop(),
 	)
 	defer tracer.Close()
@@ -66,7 +66,7 @@ func TestSpan_SetBaggageItem(t *testing.T) {
 	baggage := map[string]interface{}{}
 	fn := datadog.LoggerFunc(captureLogs(baggage))
 
-	tracer := datadog.New("blah",
+	tracer, _ := datadog.New("blah",
 		datadog.WithNop(),
 		datadog.WithLogger(fn),
 	)
@@ -86,7 +86,7 @@ func TestSpan_SetTag(t *testing.T) {
 		tags := map[string]interface{}{}
 		fn := datadog.LoggerFunc(captureLogs(tags))
 
-		tracer := datadog.New("blah",
+		tracer, _ := datadog.New("blah",
 			datadog.WithNop(),
 			datadog.WithLogger(fn),
 		)
@@ -103,7 +103,7 @@ func TestSpan_SetTag(t *testing.T) {
 }
 
 func TestSpan(t *testing.T) {
-	tracer := datadog.New("blah",
+	tracer, _ := datadog.New("blah",
 		datadog.WithNop(),
 	)
 	defer tracer.Close()
@@ -117,7 +117,7 @@ func TestSpan(t *testing.T) {
 
 func TestOpentracing(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
-		tracer := datadog.New("blah", datadog.WithNop())
+		tracer, _ := datadog.New("blah", datadog.WithNop())
 		defer tracer.Close()
 
 		opentracing.SetGlobalTracer(tracer)
@@ -135,7 +135,7 @@ func TestOpentracing(t *testing.T) {
 			t.SkipNow()
 		}
 
-		tracer := datadog.New(apiKey,
+		tracer, _ := datadog.New(apiKey,
 			datadog.WithNop(),
 		)
 		defer tracer.Close()
@@ -154,7 +154,7 @@ func TestOpentracing(t *testing.T) {
 }
 
 func BenchmarkSpan(t *testing.B) {
-	tracer := datadog.New("blah",
+	tracer, _ := datadog.New("blah",
 		datadog.WithNop(),
 	)
 	defer tracer.Close()
@@ -166,7 +166,7 @@ func BenchmarkSpan(t *testing.B) {
 }
 
 func BenchmarkConcurrentTracing(b *testing.B) {
-	tracer := datadog.New("blah",
+	tracer, _ := datadog.New("blah",
 		datadog.WithNop(),
 	)
 	defer tracer.Close()
@@ -190,7 +190,7 @@ func TestInject(t *testing.T) {
 		t.SkipNow()
 	}
 
-	tracer := datadog.New(apiKey, datadog.WithNop())
+	tracer, _ := datadog.New(apiKey, datadog.WithNop())
 	defer tracer.Close()
 
 	t.Run("Binary", func(t *testing.T) {

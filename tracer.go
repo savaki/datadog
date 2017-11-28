@@ -577,7 +577,7 @@ func getOrElse(envKey, defaultValue string) string {
 
 // New constructs a new datadog tracer for the specified service.
 // See https://docs.datadoghq.com/tracing/api/
-func New(service string, opts ...Option) *Tracer {
+func New(service string, opts ...Option) (*Tracer, error) {
 	options := &options{
 		host:      getOrElse(EnvAgentHost, "localhost"),
 		port:      getOrElse(EnvAgentPort, "8126"),
@@ -611,7 +611,7 @@ func New(service string, opts ...Option) *Tracer {
 
 	go tracer.run()
 
-	return tracer
+	return tracer, nil
 }
 
 const (

@@ -28,7 +28,7 @@ func TestMultiLogger(t *testing.T) {
 func TestTracer_LogFields(t *testing.T) {
 	var received []log.Field
 
-	tracer := datadog.New("blah",
+	tracer, _ := datadog.New("blah",
 		datadog.WithNop(),
 		datadog.WithBaggageItem("a", "b"),
 		datadog.WithLoggerFunc(func(ctx datadog.LogContext, fields ...log.Field) {
@@ -46,7 +46,7 @@ func TestTracer_LogFields(t *testing.T) {
 func TestWithBaggage(t *testing.T) {
 	calls := 0
 
-	tracer := datadog.New("blah",
+	tracer, _ := datadog.New("blah",
 		datadog.WithNop(),
 		datadog.WithBaggageItem("hello", "world"),
 		datadog.WithLoggerFunc(func(ctx datadog.LogContext, fields ...log.Field) {
@@ -72,7 +72,7 @@ func TestWithBaggage(t *testing.T) {
 }
 
 func TestLive(t *testing.T) {
-	tracer := datadog.New("blah")
+	tracer, _ := datadog.New("blah")
 	defer tracer.Close()
 
 	parent := tracer.StartSpan("parent")
@@ -94,7 +94,7 @@ func TestLive(t *testing.T) {
 }
 
 func TestBinaryCarrier(t *testing.T) {
-	tracer := datadog.New("blah", datadog.WithNop())
+	tracer, _ := datadog.New("blah", datadog.WithNop())
 	defer tracer.Close()
 
 	span := tracer.StartSpan("parent")
@@ -115,7 +115,7 @@ func TestBinaryCarrier(t *testing.T) {
 }
 
 func TestTextMapCarrier(t *testing.T) {
-	tracer := datadog.New("blah", datadog.WithNop())
+	tracer, _ := datadog.New("blah", datadog.WithNop())
 	defer tracer.Close()
 
 	span := tracer.StartSpan("parent")
@@ -135,7 +135,7 @@ func TestTextMapCarrier(t *testing.T) {
 }
 
 func TestHTTPHeadersCarrier(t *testing.T) {
-	tracer := datadog.New("blah", datadog.WithNop())
+	tracer, _ := datadog.New("blah", datadog.WithNop())
 	defer tracer.Close()
 
 	span := tracer.StartSpan("parent")

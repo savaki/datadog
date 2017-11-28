@@ -22,7 +22,7 @@ func TestWrapHandler(t *testing.T) {
 	t.Run("200", func(t *testing.T) {
 		tags := map[string]interface{}{}
 
-		tracer := datadog.New("blah",
+		tracer, _ := datadog.New("blah",
 			datadog.WithNop(),
 			datadog.WithLogSpans(),
 			datadog.WithLoggerFunc(func(logContext datadog.LogContext, fields ...log.Field) {
@@ -58,7 +58,7 @@ func TestWrapHandler(t *testing.T) {
 		count := int32(0)
 		tags := map[string]interface{}{}
 
-		tracer := datadog.New("blah",
+		tracer, _ := datadog.New("blah",
 			datadog.WithNop(),
 			datadog.WithLogSpans(),
 			datadog.WithLoggerFunc(func(logContext datadog.LogContext, fields ...log.Field) {
@@ -94,7 +94,7 @@ func TestWrapHandler(t *testing.T) {
 		defer l.Close()
 
 		count := int32(0)
-		tracer := datadog.New("blah",
+		tracer, _ := datadog.New("blah",
 			datadog.WithNop(),
 			datadog.WithLogSpans(),
 			datadog.WithLoggerFunc(func(logContext datadog.LogContext, fields ...log.Field) {
