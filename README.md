@@ -1,6 +1,7 @@
 # datadog
 
 [![GoDoc](https://godoc.org/github.com/savaki/datadog?status.svg)](https://godoc.org/github.com/savaki/datadog)
+[![TravisCI](https://travis-ci.org/savaki/datadog.svg?branch=master)](https://travis-ci.org/savaki/datadog.svg?branch=master)
 
 datadog opentracing implementation.  For more information on opentracing and
 the terminology, take a look at the [OpenTracing Project](http://opentracing.io/).

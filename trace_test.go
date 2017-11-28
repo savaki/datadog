@@ -48,6 +48,24 @@ func TestRelease(t *testing.T) {
 	assert.EqualValues(t, zero, trace)
 }
 
+type TraceGroups [][]*Trace
+
+// Len is the number of elements in the collection.
+func (t TraceGroups) Len() int {
+	return len(t)
+}
+
+// Less reports whether the element with
+// index i should sort before the element with index j.
+func (t TraceGroups) Less(i, j int) bool {
+	return t[i][0].TraceID < t[j][0].TraceID
+}
+
+// Swap swaps the elements with indexes i and j.
+func (t TraceGroups) Swap(i, j int) {
+	t[i], t[j] = t[j], t[i]
+}
+
 func TestQueue(t *testing.T) {
 	t1 := &Trace{TraceID: 1}
 	t2 := &Trace{TraceID: 2}
@@ -69,9 +87,7 @@ func TestQueue(t *testing.T) {
 		q.Push(t3)
 		assert.Len(t, groups, 3)
 
-		sort.Slice(groups, func(i, j int) bool {
-			return groups[i][0].TraceID < groups[j][0].TraceID
-		})
+		sort.Sort(TraceGroups(groups))
 		assert.EqualValues(t, [][]*Trace{{t1}, {t2}, {t3}}, groups)
 	})
 
