@@ -48,6 +48,8 @@ func TestWrapHandler(t *testing.T) {
 
 		// Then
 		assert.EqualValues(t, map[string]interface{}{
+			ext.Resource:   "/",
+			ext.Type:       "web",
 			ext.HTTPMethod: http.MethodGet,
 			ext.HTTPCode:   "200",
 			ext.HTTPURL:    "/",

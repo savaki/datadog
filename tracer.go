@@ -257,7 +257,9 @@ func (t *Tracer) push(span *Span, finishedAt int64) {
 			trace.Meta[k] = v
 		}
 		for k, v := range span.tags {
-			trace.Meta[k] = v
+			if value := toString(v); value != "" {
+				trace.Meta[k] = value
+			}
 		}
 	}
 

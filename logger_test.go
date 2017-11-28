@@ -8,6 +8,7 @@ import (
 
 func TestLoggerContext(t *testing.T) {
 	ctx := logContext{
+		service: "service",
 		baggage: map[string]string{"hello": "world"},
 		tags:    map[string]interface{}{"key": "value"},
 	}
@@ -28,6 +29,7 @@ func TestLoggerContext(t *testing.T) {
 		return true
 	})
 
-	assert.Equal(t, 1, baggageCount)
+	assert.Equal(t, ctx.service, ctx.Service())
+	assert.Equal(t, 1, tagCount)
 	assert.Equal(t, 1, tagCount)
 }

@@ -4,6 +4,9 @@ import "github.com/opentracing/opentracing-go/log"
 
 // LogContext provides an abstraction for metadata to be passed to the Log
 type LogContext interface {
+	// Service provides the name of the service
+	Service() string
+
 	// EachBaggageItem allows baggage content to be returned
 	ForeachBaggageItem(fn func(key, value string) bool)
 
@@ -36,8 +39,13 @@ func MultiLogger(loggers ...Logger) Logger {
 // logContext provides a helper to enable *Tracer to satisfy LogContext
 // without exposing ForeachBaggageItem and ForeachTag
 type logContext struct {
+	service string
 	baggage map[string]string
 	tags    map[string]interface{}
+}
+
+func (l logContext) Service() string {
+	return l.service
 }
 
 // EachBaggageItem allows baggage content to be returned

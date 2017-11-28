@@ -22,6 +22,7 @@ import (
 	"os"
 	"reflect"
 	"runtime/debug"
+	"strconv"
 	"sync"
 	"sync/atomic"
 
@@ -45,7 +46,7 @@ type Span struct {
 	parentSpanID  uint64
 	tracer        *Tracer
 	baggage       map[string]string
-	tags          map[string]string
+	tags          map[string]interface{}
 	operationName string
 	startedAt     int64
 	hasError      int32
@@ -76,6 +77,14 @@ func (s *Span) release() {
 	s.err = nil
 
 	spanPool.Put(s)
+}
+
+// Service implements LogContext
+func (s *Span) Service() string {
+	if s.service != "" {
+		return s.service
+	}
+	return s.tracer.service
 }
 
 // ForeachBaggageItem implements SpanContext and LogContext
@@ -162,6 +171,11 @@ func (s *Span) setError(err error) {
 		return
 	}
 
+	if atomic.LoadInt32(&s.hasError) == 1 {
+		// err already set
+		return
+	}
+
 	atomic.StoreInt32(&s.hasError, 1)
 
 	s.tags[ext.ErrorMsg] = err.Error()
@@ -189,7 +203,7 @@ func (s *Span) setError(err error) {
 // may ignore the tag, but shall not panic.
 func (s *Span) SetTag(key string, value interface{}) opentracing.Span {
 	if s.tags == nil {
-		s.tags = map[string]string{}
+		s.tags = map[string]interface{}{}
 	}
 
 	switch key {
@@ -199,28 +213,24 @@ func (s *Span) SetTag(key string, value interface{}) opentracing.Span {
 			err = fmt.Errorf("error set")
 		}
 		s.setError(err)
-		return s
 
 	case ext.Resource:
 		v, ok := value.(string)
 		if ok {
 			s.resource = v
 		}
-		return s
 
 	case ext.Type:
 		v, ok := value.(string)
 		if ok {
 			s.typ = v
 		}
-		return s
 
 	case ext.Service:
 		v, ok := value.(string)
 		if ok {
 			s.service = v
 		}
-		return s
 	}
 
 	if err, ok := value.(error); ok {
@@ -284,6 +294,39 @@ func toField(key string, v interface{}) log.Field {
 		return log.String(key, value.String())
 	default:
 		return log.Object(key, value)
+	}
+}
+
+func toString(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+
+	switch value := v.(type) {
+	case error:
+		return value.Error()
+	case bool:
+		return strconv.FormatBool(value)
+	case string:
+		return value
+	case float32:
+		return strconv.FormatFloat(float64(value), 'f', 4, 32)
+	case float64:
+		return strconv.FormatFloat(value, 'f', 4, 64)
+	case int:
+		return strconv.Itoa(value)
+	case int32:
+		return strconv.FormatInt(int64(value), 10)
+	case int64:
+		return strconv.FormatInt(value, 10)
+	case uint32:
+		return strconv.FormatUint(uint64(value), 10)
+	case uint64:
+		return strconv.FormatUint(value, 10)
+	case fmt.Stringer:
+		return value.String()
+	default:
+		return "<obj>"
 	}
 }
 

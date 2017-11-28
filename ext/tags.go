@@ -13,4 +13,3 @@ const (
 	// Error indicates an error has occurred span.SetTag(ext.Error, err)
 	Error = "datadog.error"
 )
-
