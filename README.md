@@ -66,6 +66,60 @@ func main() {
 }
 ```
 
+#### Specifying Datadog Resource
+
+Unlike the opentracing default, datadog has a notion of resource.  Resource can be
+defined in two ways:
+
+```go
+span := opentracing.StartSpan("operation_name", datadog.Resource("/"))
+```
+
+```go
+span := opentracing.StartSpan("operation_name")
+span.SetTag(ext.Resource, "/foo")
+```
+
+#### Specifying Datadog service type
+
+Datadog has a number of default service, types: web, cache, db, and rpc.  By default,
+the datadog tracer defaults the type to web.  To override this you can do either of
+the following:
+
+```go
+span := opentracing.StartSpan("operation_name", datadog.Type(datadog.TypeRPC))
+```
+
+```go
+span := opentracing.StartSpan("operation_name")
+span.SetTag(ext.Type, "custom")
+```
+
+#### Handling Errors
+
+Errors can be propagated to datadog in a couple ways:
+
+***Via Tag:***
+
+```go
+span := opentracing.StartSpan("operation_name")
+span.SetTag(ext.Error, error)
+```
+
+***Via LogFields:***
+
+```go
+span := opentracing.StartSpan("operation_name")
+span.LogFields(log.Error(err))
+```
+
+***Via LogKV:***
+
+```go
+span := opentracing.StartSpan("operation_name")
+span.LogKV("err", err)
+```
+
 #### Starting an empty trace by creating a "root span"
 
 It's always possible to create a "root" `Span` with no parent or other causal
