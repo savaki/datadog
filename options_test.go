@@ -1,9 +1,8 @@
 package datadog
 
 import (
-	"testing"
-
 	"fmt"
+	"testing"
 
 	"github.com/tj/assert"
 )

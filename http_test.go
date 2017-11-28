@@ -2,15 +2,12 @@ package datadog_test
 
 import (
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
-	"testing"
-
-	"io"
-
-	"net"
-
 	"sync/atomic"
+	"testing"
 
 	"github.com/opentracing/opentracing-go/log"
 	"github.com/savaki/datadog"

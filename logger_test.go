@@ -1,13 +1,10 @@
 package datadog
 
 import (
-	"testing"
-
 	"bytes"
-
-	"time"
-
 	"io/ioutil"
+	"testing"
+	"time"
 
 	"github.com/opentracing/opentracing-go/log"
 	"github.com/tj/assert"

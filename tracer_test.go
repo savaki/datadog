@@ -1,12 +1,10 @@
 package datadog_test
 
 import (
+	"bytes"
+	"net/http"
 	"testing"
 	"time"
-
-	"bytes"
-
-	"net/http"
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/log"

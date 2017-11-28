@@ -2,15 +2,11 @@ package datadog
 
 import (
 	"bytes"
-	"sync"
-
-	"time"
-
-	"io"
-
-	"os"
-
 	"fmt"
+	"io"
+	"os"
+	"sync"
+	"time"
 
 	"github.com/opentracing/opentracing-go/log"
 )
