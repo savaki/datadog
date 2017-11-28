@@ -17,12 +17,13 @@ package datadog
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -198,24 +199,21 @@ func (t *Tracer) Inject(sm opentracing.SpanContext, format interface{}, carrier 
 		return opentracing.ErrInvalidCarrier
 	}
 
-	data, err := span.MarshalJSON()
-	if err != nil {
-		return opentracing.ErrSpanContextCorrupted
-	}
+	header := marshal(span)
 
 	if format == opentracing.Binary {
 		w, ok := carrier.(io.Writer)
 		if !ok {
 			return opentracing.ErrInvalidCarrier
 		}
-		io.WriteString(w, string(data))
+		io.WriteString(w, header)
 
 	} else if format == opentracing.TextMap || format == opentracing.HTTPHeaders {
 		m, ok := carrier.(opentracing.TextMapWriter)
 		if !ok {
 			return opentracing.ErrInvalidCarrier
 		}
-		m.Set(httpHeader, string(data))
+		m.Set(httpHeader, header)
 
 	} else {
 		return opentracing.ErrUnsupportedFormat
@@ -272,15 +270,7 @@ func (t *Tracer) LogFields(fields ...log.Field) {
 	t.logger.Log(ctx, fields...)
 }
 
-func extract(data []byte) (*Span, error) {
-	span := spanPool.Get().(*Span)
-	if err := json.Unmarshal(data, span); err != nil {
-		return nil, opentracing.ErrSpanContextCorrupted
-	}
-	return span, nil
-}
-
-func extractBinary(carrier interface{}) (*Span, error) {
+func extractBinary(carrier interface{}) (opentracing.SpanContext, error) {
 	r, ok := carrier.(io.Reader)
 	if !ok {
 		return nil, opentracing.ErrInvalidCarrier
@@ -289,24 +279,24 @@ func extractBinary(carrier interface{}) (*Span, error) {
 	if err != nil {
 		return nil, opentracing.ErrSpanContextCorrupted
 	}
-	return extract(data)
+	return unmarshal(string(data))
 }
 
-func extractTextMap(carrier interface{}) (*Span, error) {
-	var span *Span
+func extractTextMap(carrier interface{}) (opentracing.SpanContext, error) {
+	var spanContext opentracing.SpanContext
 
 	m, ok := carrier.(opentracing.TextMapReader)
 	if !ok {
 		return nil, opentracing.ErrInvalidCarrier
 	}
 
-	fn := func(k, v string) error {
-		if k == httpHeader {
-			v, err := extract([]byte(v))
+	fn := func(key, value string) error {
+		if key == httpHeader {
+			v, err := unmarshal(value)
 			if err != nil {
 				return opentracing.ErrSpanContextCorrupted
 			}
-			span = v
+			spanContext = v
 		}
 		return nil
 	}
@@ -315,15 +305,15 @@ func extractTextMap(carrier interface{}) (*Span, error) {
 		return nil, err
 	}
 
-	if span == nil {
+	if spanContext == nil {
 		return nil, opentracing.ErrSpanContextCorrupted
 	}
 
-	return span, nil
+	return spanContext, nil
 }
 
-func extractHTTPHeaders(carrier interface{}) (*Span, error) {
-	var span *Span
+func extractHTTPHeaders(carrier interface{}) (opentracing.SpanContext, error) {
+	var spanContext opentracing.SpanContext
 
 	m, ok := carrier.(opentracing.HTTPHeadersCarrier)
 	if !ok {
@@ -334,13 +324,13 @@ func extractHTTPHeaders(carrier interface{}) (*Span, error) {
 		}
 	}
 
-	fn := func(k, v string) error {
-		if k == httpHeader {
-			v, err := extract([]byte(v))
+	fn := func(key, value string) error {
+		if key == httpHeader {
+			v, err := unmarshal(value)
 			if err != nil {
 				return opentracing.ErrSpanContextCorrupted
 			}
-			span = v
+			spanContext = v
 		}
 		return nil
 	}
@@ -349,11 +339,11 @@ func extractHTTPHeaders(carrier interface{}) (*Span, error) {
 		return nil, err
 	}
 
-	if span == nil {
+	if spanContext == nil {
 		return nil, opentracing.ErrSpanContextCorrupted
 	}
 
-	return span, nil
+	return spanContext, nil
 }
 
 // Extract() returns a SpanContext instance given `format` and `carrier`.
@@ -398,23 +388,23 @@ func extractHTTPHeaders(carrier interface{}) (*Span, error) {
 //
 // See Tracer.Inject().
 func (t *Tracer) Extract(format interface{}, carrier interface{}) (opentracing.SpanContext, error) {
-	var span *Span
+	var spanContext opentracing.SpanContext
 	var err error
 
 	if format == opentracing.Binary {
-		span, err = extractBinary(carrier)
+		spanContext, err = extractBinary(carrier)
 		if err != nil {
 			return nil, err
 		}
 
 	} else if format == opentracing.TextMap {
-		span, err = extractTextMap(carrier)
+		spanContext, err = extractTextMap(carrier)
 		if err != nil {
 			return nil, err
 		}
 
 	} else if format == opentracing.HTTPHeaders {
-		span, err = extractHTTPHeaders(carrier)
+		spanContext, err = extractHTTPHeaders(carrier)
 		if err != nil {
 			return nil, err
 		}
@@ -423,7 +413,7 @@ func (t *Tracer) Extract(format interface{}, carrier interface{}) (opentracing.S
 		return nil, fmt.Errorf("unhandled format, %v", format)
 	}
 
-	return span, nil
+	return spanContext, nil
 }
 
 func (t *Tracer) Close() error {
@@ -622,4 +612,60 @@ func New(service string, opts ...Option) *Tracer {
 	go tracer.run()
 
 	return tracer
+}
+
+const (
+	version   = "1"
+	separator = "/"
+)
+
+func marshal(span *Span) string {
+	values := url.Values{}
+	for k, v := range span.baggage {
+		values.Set(k, v)
+	}
+	return version + separator +
+		strconv.FormatUint(span.traceID, 10) + separator +
+		strconv.FormatUint(span.spanID, 10) + separator +
+		"1" + separator + // indicates span is live
+		values.Encode()
+}
+
+func unmarshal(value string) (opentracing.SpanContext, error) {
+	segments := strings.SplitN(value, separator, 5)
+	if len(segments) != 5 {
+		return nil, opentracing.ErrSpanContextCorrupted
+	}
+
+	traceID, err := strconv.ParseUint(segments[1], 10, 64)
+	if err != nil {
+		return nil, opentracing.ErrSpanContextCorrupted
+	}
+
+	spanID, err := strconv.ParseUint(segments[2], 10, 64)
+	if err != nil {
+		return nil, opentracing.ErrSpanContextCorrupted
+	}
+
+	var values url.Values
+	if baggage := segments[4]; len(baggage) > 0 {
+		v, err := url.ParseQuery(baggage)
+		if err != nil {
+			return nil, opentracing.ErrSpanContextCorrupted
+		}
+		values = v
+	}
+
+	span := &Span{
+		traceID: traceID,
+		spanID:  spanID,
+	}
+
+	for key, values := range values {
+		for _, value := range values {
+			span.SetBaggageItem(key, value)
+		}
+	}
+
+	return span, nil
 }

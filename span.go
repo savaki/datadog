@@ -17,8 +17,6 @@ package datadog
 
 import (
 	"bytes"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -387,39 +385,6 @@ func (s *Span) LogEventWithPayload(event string, payload interface{}) {
 func (s *Span) Log(data opentracing.LogData) {
 	fmt.Fprintln(os.Stderr, "Span.Log is deprecated. Use LogFields or LogKV")
 }
-
-type identity struct {
-	TraceID uint64            `json:"t,string"`
-	SpanID  uint64            `json:"s,string"`
-	Baggage map[string]string `json:"b,omitempty"`
-}
-
-func (s *Span) MarshalJSON() ([]byte, error) {
-	return json.Marshal(identity{
-		TraceID: s.traceID,
-		SpanID:  s.spanID,
-		Baggage: s.baggage,
-	})
-}
-
-func (s *Span) UnmarshalJSON(data []byte) error {
-	var id identity
-	if err := json.Unmarshal(data, &id); err != nil {
-		return ErrInvalidToken
-	}
-
-	span := spanPool.Get().(*Span)
-	span.traceID = id.TraceID
-	span.parentSpanID = id.SpanID
-	span.baggage = id.Baggage
-	*s = *span
-	return nil
-}
-
-var (
-	// ErrInvalidToken if the token provided cannot be unmarshaled
-	ErrInvalidToken = errors.New("invalid token")
-)
 
 type StartSpanOption interface {
 	Apply(opts *opentracing.StartSpanOptions)
