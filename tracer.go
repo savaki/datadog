@@ -16,6 +16,7 @@
 package datadog
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -23,15 +24,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"reflect"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
-
-	"reflect"
-
-	"bytes"
-
-	"runtime/debug"
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/log"
