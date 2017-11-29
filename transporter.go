@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/ugorji/go/codec"
 )
 
@@ -63,7 +62,7 @@ func newTransporter(output io.Writer, host, port string) transporterFunc {
 	return func(groups [][]*Trace) error {
 		encoder := encoderPool.Get().(traceEncoder)
 		if err := encoder.Encode(groups); err != nil {
-			return errors.Wrapf(err, "unable to encode trace groups")
+			return fmt.Errorf("unable to encode trace groups - %v", err)
 		}
 
 		req, _ := http.NewRequest(http.MethodPut, u, encoder)
@@ -71,7 +70,7 @@ func newTransporter(output io.Writer, host, port string) transporterFunc {
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
-			return errors.Wrapf(err, "PUT %v failed", u)
+			return fmt.Errorf("PUT %v failed - %v", u, err)
 		}
 		defer resp.Body.Close()
 		io.Copy(output, resp.Body)
@@ -89,6 +88,6 @@ func withRetry(t Transporter, retries int, delay time.Duration) transporterFunc 
 
 			time.Sleep(delay)
 		}
-		return errors.Errorf("unable to post traces to datadog after %v attempts", retries)
+		return fmt.Errorf("unable to post traces to datadog after %v attempts", retries)
 	}
 }

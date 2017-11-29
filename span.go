@@ -16,12 +16,9 @@
 package datadog
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"os"
-	"reflect"
-	"runtime/debug"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -49,11 +46,11 @@ type Span struct {
 	tags          map[string]interface{}
 	operationName string
 	startedAt     int64
-	hasError      int32
+	errCount      int32
+	err           error
 	resource      string
 	typ           string
 	service       string
-	err           error
 }
 
 func (s *Span) release() {
@@ -70,11 +67,11 @@ func (s *Span) release() {
 	s.tracer = nil
 	s.operationName = ""
 	s.startedAt = 0
-	s.hasError = 0
+	s.errCount = 0
+	s.err = nil
 	s.resource = ""
 	s.typ = ""
 	s.service = ""
-	s.err = nil
 
 	spanPool.Put(s)
 }
@@ -157,7 +154,7 @@ func (p pp) Precision() (precision int, ok bool) {
 
 // Flag reports whether the flag c, a character, has been set.
 func (p pp) Flag(c int) bool {
-	return false
+	return c == '+'
 }
 
 // Sets or changes the operation name.
@@ -178,26 +175,8 @@ func (s *Span) setError(err error) {
 	if err == nil {
 		return
 	}
-
-	if atomic.LoadInt32(&s.hasError) == 1 {
-		// err already set
-		return
-	}
-
-	atomic.StoreInt32(&s.hasError, 1)
-
-	s.setTag(ext.ErrorMsg, err.Error())
-	s.setTag(ext.ErrorType, reflect.TypeOf(err).String())
-
-	switch v := err.(type) {
-	case fmt.Formatter:
-		buffer := bytes.NewBuffer(nil)
-		v.Format(pp{w: buffer}, 'v')
-		s.setTag(ext.ErrorStack, buffer.String())
-
-	default:
-		stack := debug.Stack()
-		s.setTag(ext.ErrorStack, string(stack))
+	if atomic.AddInt32(&s.errCount, 1) == 1 {
+		s.err = err
 	}
 }
 

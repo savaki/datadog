@@ -27,8 +27,16 @@ import (
 	"strings"
 	"time"
 
+	"reflect"
+
+	"bytes"
+
+	"runtime/debug"
+
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/log"
+	"github.com/pkg/errors"
+	"github.com/savaki/datadog/ext"
 )
 
 const (
@@ -222,6 +230,25 @@ func (t *Tracer) Inject(sm opentracing.SpanContext, format interface{}, carrier 
 	return nil
 }
 
+type stackTracer interface {
+	StackTrace() errors.StackTrace
+}
+
+func extractStackTrace(err error) string {
+	st, ok := err.(stackTracer)
+	if !ok {
+		return string(debug.Stack())
+	}
+
+	buffer := bufferPool.Get().(*bytes.Buffer)
+	defer func() {
+		bufferPool.Put(buffer)
+	}()
+
+	st.StackTrace().Format(pp{w: buffer}, 'v')
+	return buffer.String()
+}
+
 func (t *Tracer) push(span *Span, finishedAt int64) {
 	if finishedAt == 0 {
 		finishedAt = t.now()
@@ -250,16 +277,24 @@ func (t *Tracer) push(span *Span, finishedAt int64) {
 	trace.Start = span.startedAt
 	trace.Duration = finishedAt - span.startedAt
 	trace.ParentSpanID = span.parentSpanID
-	trace.Error = span.hasError
 
-	if trace.Meta != nil {
-		for k, v := range span.baggage {
-			trace.Meta[k] = v
-		}
-		for k, v := range span.tags {
-			if value := toString(v); value != "" {
-				trace.Meta[k] = value
-			}
+	if trace.Meta == nil {
+		trace.Meta = map[string]string{}
+	}
+
+	if err := span.err; err != nil {
+		trace.Error = 1
+		trace.Meta[ext.ErrorMsg] = err.Error()
+		trace.Meta[ext.ErrorType] = reflect.TypeOf(err).String()
+		trace.Meta[ext.ErrorStack] = extractStackTrace(err)
+	}
+
+	for k, v := range span.baggage {
+		trace.Meta[k] = v
+	}
+	for k, v := range span.tags {
+		if value := toString(v); value != "" {
+			trace.Meta[k] = value
 		}
 	}
 
