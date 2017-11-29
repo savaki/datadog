@@ -82,9 +82,6 @@ func TestWrapHandler(t *testing.T) {
 
 		// Then
 		assert.EqualValues(t, 1, count)
-		assert.NotNil(t, tags[ext.ErrorMsg], "expected error to be set since status code 500")
-		assert.NotNil(t, tags[ext.ErrorStack], "expected error to be set since status code 500")
-		assert.NotNil(t, tags[ext.ErrorType], "expected error to be set since status code 500")
 	})
 
 	t.Run("from client", func(t *testing.T) {
