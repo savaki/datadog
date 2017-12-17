@@ -123,7 +123,11 @@ func (s *Span) FinishWithOptions(opts opentracing.FinishOptions) {
 
 	s.tracer.push(s, finishedAt)
 	if s.tracer.logSpans {
-		s.LogFields(log.String("message", s.operationName))
+		if s.err == nil {
+			s.LogFields(log.String("message", s.operationName))
+		} else {
+			s.LogFields(log.String("message", s.operationName), log.Error(s.err))
+		}
 	}
 }
 
