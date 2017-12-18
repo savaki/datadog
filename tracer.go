@@ -133,6 +133,7 @@ loop:
 			if parent, ok := ref.ReferencedContext.(*Span); ok {
 				span.traceID = parent.traceID
 				span.parentSpanID = parent.spanID
+				span.errCount = parent.errCount
 				span.spanID = nextID()
 			}
 			break loop
@@ -159,6 +160,11 @@ loop:
 
 	for k, v := range options.Tags {
 		span.SetTag(k, v)
+	}
+
+	if span.errCount == nil {
+		errCount := int32(0)
+		span.errCount = &errCount
 	}
 
 	return span

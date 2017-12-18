@@ -18,6 +18,7 @@ package datadog_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/log"
+	"github.com/pkg/errors"
 	"github.com/savaki/datadog"
 	"github.com/savaki/datadog/ext"
 	"github.com/tj/assert"
@@ -299,4 +301,27 @@ func TestService(t *testing.T) {
 	opts := &opentracing.StartSpanOptions{}
 	datadog.Service(name).Apply(opts)
 	assert.Equal(t, name, opts.Tags[ext.Service])
+}
+
+func TestLogsErrorsOnlyOnce(t *testing.T) {
+	buffer := bytes.NewBuffer(nil)
+
+	tracer, err := datadog.New("service", datadog.WithNop(), datadog.WithLogSpans(), datadog.WithLoggerFunc(func(logContext datadog.LogContext, fields ...log.Field) {
+		for _, field := range fields {
+			fmt.Fprintln(buffer, field)
+		}
+	}))
+	assert.Nil(t, err)
+	defer tracer.Close()
+
+	parent := tracer.StartSpan("parent")
+	child := tracer.StartSpan("child", opentracing.ChildOf(parent.Context()))
+
+	child.SetTag("err", errors.Errorf("child!"))
+	parent.SetTag("err", errors.Errorf("parent!"))
+
+	child.Finish()
+	parent.Finish()
+
+	assert.Contains(t, buffer.String(), "child!")
 }

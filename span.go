@@ -46,11 +46,11 @@ type Span struct {
 	tags          map[string]interface{}
 	operationName string
 	startedAt     int64
-	errCount      int32
 	err           error
 	resource      string
 	typ           string
 	service       string
+	errCount      *int32
 }
 
 func (s *Span) release() {
@@ -67,7 +67,7 @@ func (s *Span) release() {
 	s.tracer = nil
 	s.operationName = ""
 	s.startedAt = 0
-	s.errCount = 0
+	s.errCount = nil
 	s.err = nil
 	s.resource = ""
 	s.typ = ""
@@ -179,7 +179,7 @@ func (s *Span) setError(err error) {
 	if err == nil {
 		return
 	}
-	if atomic.AddInt32(&s.errCount, 1) == 1 {
+	if atomic.AddInt32(s.errCount, 1) == 1 {
 		s.err = err
 	}
 }
